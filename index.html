@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SS Billing</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; min-width: 220px; background: #1a1a2e; color: white; display: flex; flex-direction: column; transition: width 0.25s; overflow: hidden; }
+    .sidebar.collapsed { width: 56px; min-width: 56px; }
+    .sidebar-header { display: flex; align-items: center; gap: 12px; padding: 18px 16px; border-bottom: 1px solid #2a2a4a; }
+    .hamburger { background: none; border: none; cursor: pointer; color: white; font-size: 20px; min-width: 24px; }
+    .sidebar-title { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+    .sidebar.collapsed .sidebar-title { display: none; }
+    .nav-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; cursor: pointer; color: #aaa; transition: background 0.15s, color 0.15s; white-space: nowrap; border: none; background: none; width: 100%; text-align: left; font-size: 14px; }
+    .nav-item:hover { background: #2a2a4a; color: white; }
+    .nav-item.active { background: #16213e; color: #4fc3f7; border-left: 3px solid #4fc3f7; }
+    .nav-icon { font-size: 18px; min-width: 24px; text-align: center; }
+    .nav-label { white-space: nowrap; overflow: hidden; }
+    .sidebar.collapsed .nav-label { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: white; border-bottom: 1px solid #e0e0e0; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+    .topbar-title { font-size: 16px; font-weight: 700; color: #222; }
+    .topbar-sub { font-size: 12px; color: #888; }
+    .content { flex: 1; overflow-y: auto; padding: 20px; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .billing-grid { display: grid; grid-template-columns: 1fr 380px; gap: 16px; }
+    .panel { background: white; border-radius: 10px; border: 1px solid #e0e0e0; padding: 16px; }
+    .panel-title { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; }
+    .search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .search-row input, .search-row select { flex: 1; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; }
+    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; }
+    .product-card { background: #f9f9f9; border: 1px solid #e8e8e8; border-radius: 8px; padding: 10px; cursor: pointer; transition: border-color 0.15s; }
+    .product-card:hover { border-color: #333; background: #fff; }
+    .product-card .name { font-size: 12px; font-weight: 600; color: #222; margin-bottom: 4px; line-height: 1.3; }
+    .product-card .price { font-size: 13px; color: #444; }
+    .gst-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-top: 4px; background: #e1f5ee; color: #0f6e56; }
+    .serial-badge { display: block; font-size: 9px; color: #aaa; margin-top: 3px; letter-spacing: 0.03em; }
+    .barcode-scan-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .barcode-scan-row input { flex: 1; padding: 7px 10px; border: 2px solid #4fc3f7; border-radius: 6px; font-size: 13px; outline: none; }
+    .store-name { font-size: 15px; font-weight: 700; color: #222; }
+    .store-sub { font-size: 11px; color: #888; }
+    .bill-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .customer-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .customer-row input { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; }
+    .bill-items { max-height: 220px; overflow-y: auto; margin-bottom: 10px; }
+    .bill-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+    .bill-table th { font-size: 10px; font-weight: 600; color: #999; text-align: left; padding: 4px; border-bottom: 1px solid #eee; }
+    .bill-table td { padding: 5px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; color: #333; }
+    .bill-table td.right, .bill-table th.right { text-align: right; }
+    .qty-btn { width: 22px; height: 22px; border: 1px solid #ddd; border-radius: 4px; background: #f5f5f5; cursor: pointer; font-size: 14px; color: #333; }
+    .qty-num { display: inline-block; min-width: 20px; text-align: center; font-size: 12px; }
+    .remove-btn { background: none; border: none; cursor: pointer; color: #c0392b; font-size: 14px; }
+    .totals-section { border-top: 1px solid #eee; padding-top: 10px; }
+    .total-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; color: #666; }
+    .total-row.grand { font-size: 16px; font-weight: 700; color: #111; padding-top: 8px; border-top: 1px solid #ddd; margin-top: 4px; }
+    .discount-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+    .discount-row label { color: #666; white-space: nowrap; }
+    .discount-row input { width: 70px; padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; }
+    .payment-mode { display: flex; gap: 6px; margin-bottom: 10px; }
+    .pay-btn { flex: 1; padding: 5px; font-size: 12px; border: 1px solid #ddd; border-radius: 6px; background: #f5f5f5; cursor: pointer; color: #666; }
+    .pay-btn.active { background: #222; color: white; border-color: #222; font-weight: 600; }
+    .action-row { display: flex; gap: 8px; margin-top: 10px; }
+    .action-row button { flex: 1; padding: 9px; font-size: 13px; border-radius: 6px; cursor: pointer; border: 1px solid #ddd; background: #f5f5f5; font-weight: 500; }
+    .btn-primary { background: #1a1a2e !important; color: white !important; border-color: #1a1a2e !important; }
+    .empty-bill { text-align: center; padding: 2rem 0; color: #bbb; font-size: 13px; }
+    .form-card { background: white; border-radius: 10px; border: 1px solid #e0e0e0; padding: 24px; max-width: 620px; }
+    .form-title { font-size: 15px; font-weight: 700; color: #222; margin-bottom: 20px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; outline: none; }
+    .form-group input:focus, .form-group select:focus { border-color: #4fc3f7; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn { padding: 9px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
+    .btn-dark { background: #1a1a2e; color: white; }
+    .btn-success { background: #27ae60; color: white; }
+    .success-msg { color: #27ae60; font-size: 13px; margin-top: 10px; display: none; line-height: 1.6; }
+    .error-msg { color: #c0392b; font-size: 13px; margin-top: 10px; display: none; }
+    .items-list { background: white; border-radius: 10px; border: 1px solid #e0e0e0; overflow: hidden; overflow-x: auto; }
+    .items-list table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .items-list th { background: #f5f5f5; padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; white-space: nowrap; }
+    .items-list td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #333; }
+    .items-list tr:hover td { background: #fafafa; }
+    .edit-btn { background: #e8f4fd; color: #1565c0; border: none; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; margin-right: 4px; }
+    .del-btn { background: #fde8e8; color: #c0392b; border: none; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+    .barcode-btn { background: #e8f5e9; color: #2e7d32; border: none; border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; margin-right: 4px; }
+    .cat-tag { display: inline-flex; align-items: center; gap: 6px; background: #f0f0f0; border-radius: 20px; padding: 4px 12px; font-size: 13px; margin: 4px; }
+    .cat-tag button { background: none; border: none; color: #c0392b; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+    .stat-card { background: white; border-radius: 10px; border: 1px solid #e0e0e0; padding: 16px; }
+    .stat-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+    .stat-value { font-size: 24px; font-weight: 700; color: #1a1a2e; }
+    .stat-sub { font-size: 12px; color: #aaa; margin-top: 4px; }
+    .chart-bar-wrap { background: white; border-radius: 10px; border: 1px solid #e0e0e0; padding: 16px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
+    .bar-label { width: 120px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { flex: 1; background: #f0f0f0; border-radius: 4px; height: 10px; }
+    .bar-fill { height: 10px; border-radius: 4px; background: #4fc3f7; }
+    .bar-val { width: 60px; text-align: right; color: #333; font-weight: 600; }
+    .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: white; border-radius: 12px; padding: 24px; width: 440px; max-width: 90vw; }
+    .modal-title { font-size: 15px; font-weight: 700; color: #222; margin-bottom: 16px; }
+    .modal-close { float: right; background: none; border: none; font-size: 20px; cursor: pointer; color: #888; margin-top: -4px; }
+    .bill-row { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: border-color 0.15s; }
+    .bill-row:hover { border-color: #4fc3f7; }
+    .bill-row-left .bill-id { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+    .bill-row-left .bill-meta { font-size: 12px; color: #888; margin-top: 2px; }
+    .bill-row-right .bill-amt { font-size: 16px; font-weight: 700; color: #27ae60; }
+    .bill-row-right .bill-pay { font-size: 11px; color: #888; text-align: right; }
+    .pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+    .pagination button { padding: 6px 14px; border: 1px solid #ddd; border-radius: 6px; background: white; cursor: pointer; font-size: 13px; }
+    .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pagination span { font-size: 13px; color: #666; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- LICENSE SCREEN -->
+<div id="licenseScreen" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#1a1a2e;z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:16px;padding:40px;width:460px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+    <div style="font-size:36px;margin-bottom:8px;">🛒</div>
+    <h1 style="font-size:22px;font-weight:800;color:#1a1a2e;margin-bottom:4px;">SS Billings</h1>
+    <p style="font-size:13px;color:#888;margin-bottom:24px;">Professional Supermarket Billing Software</p>
+    <div id="licenseContent"></div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <button class="hamburger" onclick="toggleSidebar()">&#9776;</button>
+    <span class="sidebar-title">PM Mart</span>
+  </div>
+  <button class="nav-item active" onclick="showPage('home',event)"><span class="nav-icon">🏠</span><span class="nav-label">Home / Billing</span></button>
+  <button class="nav-item" onclick="showPage('add',event)"><span class="nav-icon">➕</span><span class="nav-label">Add Items</span></button>
+  <button class="nav-item" onclick="showPage('manage',event)"><span class="nav-icon">🧰</span><span class="nav-label">Manage Items</span></button>
+  <button class="nav-item" onclick="showPage('categories',event)"><span class="nav-icon">🏷️</span><span class="nav-label">Categories</span></button>
+  <button class="nav-item" onclick="showPage('history',event)"><span class="nav-icon">📋</span><span class="nav-label">Bill History</span></button>
+  <button class="nav-item" onclick="showPage('customers',event)"><span class="nav-icon">👥</span><span class="nav-label">Customers</span></button>
+  <button class="nav-item" onclick="showPage('dashboard',event)"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span></button>
+  <button class="nav-item" onclick="openAdminLogin()"><span class="nav-icon">🔐</span><span class="nav-label">Admin</span></button>
+  <button class="nav-item" onclick="openLicenseActivation()"><span class="nav-icon">🔑</span><span class="nav-label">Activate License</span></button>
+  <button class="nav-item" onclick="showPage('settings',event)"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="topbarTitle">Home / Billing</div>
+      <div class="topbar-sub" id="topbarSub">PM Supermarket | GSTIN: XXXXXXXXXXXXXXX</div>
+    </div>
+    <div style="font-size:13px;color:#888;" id="topbarDate"></div>
+  </div>
+
+  <div class="content">
+
+    <!-- HOME PAGE -->
+    <div class="page active" id="page-home">
+      <div class="billing-grid">
+        <div class="panel">
+          <div class="panel-title">Products</div>
+          <div class="search-row">
+            <input type="text" id="search" placeholder="Search by name, serial or barcode..." oninput="renderProducts()" />
+            <select id="catFilter" onchange="renderProducts()"><option value="">All categories</option></select>
+          </div>
+          <div class="product-grid" id="productGrid"></div>
+        </div>
+        <div class="panel">
+          <div class="bill-header">
+            <div>
+              <div class="store-name" id="billShopName">PM Supermarket</div>
+              <div class="store-sub" id="billShopAddress">Paarai palli busstand opposite, Madhavalayam, 629302</div>
+            </div>
+            <div style="font-size:12px;color:#888;" id="billNo">Bill #001</div>
+          </div>
+          <div class="barcode-scan-row">
+            <input type="text" id="barcodeInput" placeholder="📷 Scan barcode or serial number..." onkeydown="handleBarcodeScan(event)" />
+          </div>
+          <div class="customer-row" style="position:relative;">
+            <div style="flex:1;position:relative;">
+              <input type="text" id="custName" placeholder="Customer name or phone..." oninput="searchCustomerAutocomplete()" autocomplete="off" style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none;" />
+              <div id="custAutocomplete" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #ddd;border-radius:6px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;"></div>
+            </div>
+            <input type="text" id="custPhone" placeholder="Phone" style="width:120px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none;" />
+            <input type="hidden" id="custId" value="" />
+          </div>
+          <div id="custCreditInfo" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:6px 10px;font-size:12px;color:#856404;margin-bottom:8px;"></div>
+          <div class="panel-title">Bill items</div>
+          <div class="bill-items">
+            <table class="bill-table">
+              <thead><tr>
+                <th style="width:35%">Item</th>
+                <th style="width:18%" class="right">Rate</th>
+                <th style="width:28%">Qty</th>
+                <th style="width:19%" class="right">Amt</th>
+                <th style="width:20px"></th>
+              </tr></thead>
+              <tbody id="billBody"></tbody>
+            </table>
+            <div class="empty-bill" id="emptyMsg">Scan barcode / serial no. or add from the left</div>
+          </div>
+          <div class="discount-row">
+            <label>Discount (%)</label>
+            <input type="number" id="discountPct" value="0" min="0" max="100" step="1" oninput="renderTotals()" />
+          </div>
+          <div class="totals-section" id="totalsSection"></div>
+          <div class="panel-title" style="margin-top:12px;">Payment mode</div>
+          <div class="payment-mode">
+            <button class="pay-btn active" onclick="setPayMode('Cash')">Cash</button>
+            <button class="pay-btn" onclick="setPayMode('UPI')">UPI</button>
+            <button class="pay-btn" onclick="setPayMode('Card')">Card</button>
+            <button class="pay-btn" onclick="setPayMode('Credit')">Credit</button>
+          </div>
+          <div class="action-row">
+            <button onclick="printBill()">🖨 Print Bill</button>
+            <button class="btn-primary" onclick="newBill()">+ New Bill</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD ITEMS PAGE -->
+    <div class="page" id="page-add">
+      <div class="form-card">
+        <div class="form-title">➕ Add New Product</div>
+        <div class="form-group"><label>Product Name</label><input type="text" id="add-name" placeholder="e.g. Amul Paneer 200g" /></div>
+        <div class="form-row">
+          <div class="form-group"><label>Category</label><select id="add-cat"></select></div>
+          <div class="form-group">
+            <label>GST Slab (%)</label>
+            <select id="add-gst">
+              <option value="0">0% (Essentials)</option>
+              <option value="5">5% (Basic)</option>
+              <option value="12">12% (Standard)</option>
+              <option value="18" selected>18% (General)</option>
+              <option value="28">28% (Luxury/Aerated)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>MRP (₹) incl. GST</label><input type="number" id="add-price" placeholder="e.g. 120" min="0" step="0.01" /></div>
+          <div class="form-group"><label>Stock Qty</label><input type="number" id="add-stock" placeholder="e.g. 50" min="0" /></div>
+        </div>
+        <div class="form-group">
+          <label>Barcode (optional — auto-generated if left blank)</label>
+          <input type="text" id="add-barcode" placeholder="Leave blank to auto-generate" />
+        </div>
+        <div style="background:#f0f7ff;border:1px solid #bee3f8;border-radius:6px;padding:10px 14px;font-size:12px;color:#2b6cb0;margin-bottom:14px;">
+          💡 <strong>Serial number</strong> is always auto-generated. You can search products by serial number from the billing screen.
+        </div>
+        <button class="btn btn-dark" onclick="addProduct()">Add Product</button>
+        <div class="success-msg" id="add-success"></div>
+        <div class="error-msg" id="add-error"></div>
+      </div>
+    </div>
+
+    <!-- MANAGE ITEMS PAGE -->
+    <div class="page" id="page-manage">
+      <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="manage-search" placeholder="🔍 Search by name, serial number or barcode..."
+          oninput="renderManageItems()"
+          style="flex:1;min-width:280px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;" />
+        <select id="manage-cat-filter" onchange="renderManageItems()"
+          style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;">
+          <option value="">All categories</option>
+        </select>
+      </div>
+      <div class="items-list" id="manageList"></div>
+
+      <div class="form-card" id="editForm" style="display:none;margin-top:20px;">
+        <div class="form-title">✏️ Edit Product</div>
+        <input type="hidden" id="edit-id" />
+        <div class="form-group"><label>Product Name</label><input type="text" id="edit-name" /></div>
+        <div class="form-row">
+          <div class="form-group"><label>Category</label><select id="edit-cat"></select></div>
+          <div class="form-group">
+            <label>GST Slab (%)</label>
+            <select id="edit-gst">
+              <option value="0">0%</option><option value="5">5%</option>
+              <option value="12">12%</option><option value="18">18%</option><option value="28">28%</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>MRP (₹)</label><input type="number" id="edit-price" min="0" step="0.01" /></div>
+          <div class="form-group"><label>Stock Qty</label><input type="number" id="edit-stock" min="0" /></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Barcode</label><input type="text" id="edit-barcode" placeholder="Barcode" /></div>
+          <div class="form-group"><label>Serial Number (read-only)</label>
+            <input type="text" id="edit-serial" readonly style="background:#f5f5f5;color:#888;cursor:not-allowed;" />
+          </div>
+        </div>
+        <button class="btn btn-success" onclick="saveEdit()">Save Changes</button>
+        <button class="btn" style="background:#eee;color:#333;margin-left:8px;" onclick="closeEditForm()">Cancel</button>
+        <div class="success-msg" id="edit-success">✅ Product updated!</div>
+        <div class="error-msg" id="edit-error"></div>
+      </div>
+    </div>
+
+    <!-- CATEGORIES PAGE -->
+    <div class="page" id="page-categories">
+      <div class="form-card" style="margin-bottom:20px;">
+        <div class="form-title">🏷️ Manage Categories</div>
+        <div class="form-group">
+          <label>New Category Name</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="new-cat-name" placeholder="e.g. Frozen Foods" style="flex:1;" onkeydown="if(event.key==='Enter') addCategory()" />
+            <button class="btn btn-dark" onclick="addCategory()">Add Category</button>
+          </div>
+        </div>
+        <div class="success-msg" id="cat-success">✅ Category added!</div>
+        <div class="error-msg" id="cat-error"></div>
+      </div>
+      <div class="items-list">
+        <div class="panel-title" style="padding:12px 0;">Categories</div>
+        <div id="catTagList"></div>
+      </div>
+    </div>
+
+    <!-- BILL HISTORY PAGE -->
+    <div class="page" id="page-history">
+      <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+        <input type="text" id="history-search" placeholder="🔍 Search by customer name, phone or bill number..."
+          style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;" oninput="searchBills()" />
+        <button class="btn btn-dark" onclick="loadHistory()">All Bills</button>
+      </div>
+      <div id="billHistoryList"></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+    <!-- DASHBOARD PAGE -->
+    <div class="page" id="page-dashboard">
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Total Products</div><div class="stat-value" id="d-total-products">0</div><div class="stat-sub">in inventory</div></div>
+        <div class="stat-card"><div class="stat-label">Categories</div><div class="stat-value" id="d-categories">0</div><div class="stat-sub">product categories</div></div>
+        <div class="stat-card"><div class="stat-label">Bills Today</div><div class="stat-value" id="d-bills">0</div><div class="stat-sub">transactions</div></div>
+        <div class="stat-card"><div class="stat-label">Revenue Today</div><div class="stat-value" id="d-revenue">₹0</div><div class="stat-sub">incl. GST</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div class="chart-bar-wrap"><div class="panel-title" style="margin-bottom:14px;">Products by category</div><div id="catChart"></div></div>
+        <div class="chart-bar-wrap"><div class="panel-title" style="margin-bottom:14px;">Products by GST slab</div><div id="gstChart"></div></div>
+      </div>
+      <div class="chart-bar-wrap" id="lowStockSection"></div>
+    </div>
+
+
+
+    <!-- CUSTOMERS PAGE -->
+    <div class="page" id="page-customers">
+      <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="cust-search" placeholder="🔍 Search by name or phone..."
+          oninput="filterCustomers()"
+          style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;min-width:200px;" />
+        <button class="btn btn-dark" onclick="openAddCustomer()">➕ Add Customer</button>
+      </div>
+
+      <!-- Add/Edit Customer Form -->
+      <div class="form-card" id="custForm" style="display:none;margin-bottom:20px;">
+        <div class="form-title" id="custFormTitle">➕ Add Customer</div>
+        <input type="hidden" id="cust-id" />
+        <div class="form-row">
+          <div class="form-group"><label>Name</label><input type="text" id="cust-name" placeholder="Customer name" /></div>
+          <div class="form-group"><label>Phone</label><input type="text" id="cust-phone" placeholder="Phone number" /></div>
+        </div>
+        <div class="form-group"><label>Address (optional)</label><input type="text" id="cust-address" placeholder="Customer address" /></div>
+        <button class="btn btn-success" onclick="saveCustomer()">Save</button>
+        <button class="btn" style="background:#eee;color:#333;margin-left:8px;" onclick="closeCustForm()">Cancel</button>
+        <div class="success-msg" id="cust-success">✅ Saved!</div>
+        <div class="error-msg" id="cust-error"></div>
+      </div>
+
+      <!-- Customers List -->
+      <div class="items-list" id="customersList"></div>
+
+      <!-- Customer Detail Modal -->
+      <div class="modal-overlay" id="custDetailModal">
+        <div class="modal" style="width:560px;max-height:80vh;overflow-y:auto;">
+          <div class="modal-title">👤 <span id="custDetailName"></span>
+            <button class="modal-close" onclick="document.getElementById('custDetailModal').classList.remove('open')">×</button>
+          </div>
+          <div id="custDetailContent"></div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ADMIN PAGE -->
+    <div class="page" id="page-admin">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+        <!-- Staff Management -->
+        <div class="panel">
+          <div class="panel-title">Staff Members</div>
+          <button class="btn btn-dark" onclick="openAddStaff()" style="width:100%;margin-bottom:12px;">➕ Add Staff</button>
+          <div class="items-list" id="staffList"></div>
+        </div>
+        <!-- Quick Attendance -->
+        <div class="panel">
+          <div class="panel-title">Today's Attendance</div>
+          <div id="attendanceList"></div>
+        </div>
+      </div>
+
+      <!-- Staff Form -->
+      <div class="form-card" id="staffForm" style="display:none;margin-bottom:20px;">
+        <div class="form-title" id="staffFormTitle">➕ Add Staff</div>
+        <input type="hidden" id="staff-id" />
+        <div class="form-row">
+          <div class="form-group"><label>Name</label><input type="text" id="staff-name" /></div>
+          <div class="form-group"><label>Position</label><input type="text" id="staff-pos" placeholder="e.g. Cashier, Manager" /></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Phone</label><input type="text" id="staff-phone" /></div>
+          <div class="form-group"><label>Monthly Salary (₹)</label><input type="number" id="staff-sal" min="0" step="100" /></div>
+        </div>
+        <button class="btn btn-success" onclick="saveStaff()">Save</button>
+        <button class="btn" style="background:#eee;color:#333;margin-left:8px;" onclick="closeStaffForm()">Cancel</button>
+        <div class="success-msg" id="staff-success">✅ Saved!</div>
+      </div>
+
+      <!-- CHANGE ADMIN PASSWORD -->
+      <div class="form-card" style="margin-bottom:20px;">
+        <div class="form-title">🔐 Change Admin Password</div>
+        <div class="form-row">
+          <div class="form-group"><label>Current Password</label><input type="password" id="currentAdminPassword" autocomplete="current-password" /></div>
+          <div class="form-group"><label>New Password</label><input type="password" id="newAdminPassword" autocomplete="new-password" /></div>
+        </div>
+        <div class="form-group"><label>Confirm New Password</label><input type="password" id="confirmAdminPassword" autocomplete="new-password" /></div>
+        <button class="btn btn-dark" onclick="changeAdminPassword()">🔑 Change Password</button>
+        <div class="success-msg" id="password-success" style="display:none;">✅ Admin password changed successfully!</div>
+        <div class="error-msg" id="password-error" style="display:none;"></div>
+      </div>
+
+      <!-- Delete Bills Section -->
+      <div class="form-card">
+        <div class="form-title">🗑️ Delete Bills</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input type="text" id="delete-bill-search" placeholder="Search bill # or customer name..."
+            style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;" />
+          <button class="btn btn-dark" onclick="searchDeleteBills()">Search</button>
+        </div>
+        <div id="deleteBillsList" style="max-height:300px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Salary Report -->
+      <div class="form-card" style="margin-top:20px;">
+        <div class="form-title">💰 Salary Report</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+          <input type="month" id="salaryMonth" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;" />
+          <button class="btn btn-dark" onclick="generateSalaryReport()">Generate Report</button>
+        </div>
+        <div id="salaryReportContent"></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div class="page" id="page-settings">
+      <div class="form-card">
+        <div class="form-title">⚙️ Shop Settings</div>
+        <div class="form-group">
+          <label>Shop Name</label>
+          <input type="text" id="set-shopName" placeholder="e.g. PM Supermarket" />
+        </div>
+        <div class="form-group">
+          <label>Address</label>
+          <input type="text" id="set-shopAddress" placeholder="e.g. 123 Main Road, City - 600001" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>GSTIN</label>
+            <input type="text" id="set-shopGstin" placeholder="e.g. 29AAAPL1234C1Z5" />
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="text" id="set-shopPhone" placeholder="e.g. 98400-00000" />
+          </div>
+        </div>
+        <button class="btn btn-dark" onclick="saveSettings()">💾 Save Settings</button>
+        <div class="success-msg" id="settings-success">✅ Settings saved! All bills and headers updated.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ADMIN PASSWORD MODAL -->
+<div class="modal-overlay" id="adminLoginModal">
+  <div class="modal">
+    <div class="modal-title">🔐 Admin Access
+      <button class="modal-close" onclick="closeAdminLogin()">×</button>
+    </div>
+    <div style="text-align:center;">
+      <input type="password" id="adminPassword" placeholder="Enter admin password"
+        style="width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:15px;outline:none;margin-bottom:12px;"
+        onkeydown="if(event.key==='Enter') verifyAdmin()" />
+      <button class="btn btn-dark" style="width:100%;margin-bottom:8px;" onclick="verifyAdmin()">Login</button>
+      <button class="btn" style="width:100%;background:#eee;color:#333;" onclick="closeAdminLogin()">Cancel</button>
+      <div id="adminError" style="color:#c0392b;margin-top:8px;font-size:13px;display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- BARCODE MODAL -->
+<div class="modal-overlay" id="barcodeModal">
+  <div class="modal">
+    <div class="modal-title">🔲 Barcode — <span id="modal-product-name"></span>
+      <button class="modal-close" onclick="closeBarcodeModal()">×</button>
+    </div>
+    <div style="text-align:center;padding:16px 0;">
+      <svg id="barcodePreview"></svg>
+      <div style="font-size:12px;color:#444;margin-top:8px;font-weight:600;" id="modal-barcode-val"></div>
+      <div style="font-size:11px;color:#aaa;margin-top:4px;" id="modal-serial-val"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn btn-dark" style="flex:1;" onclick="printBarcode()">🖨 Print Barcode</button>
+      <button class="btn" style="flex:1;background:#eee;color:#333;" onclick="closeBarcodeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- BILL DETAIL MODAL -->
+<div class="modal-overlay" id="billDetailModal">
+  <div class="modal" style="width:540px;">
+    <div class="modal-title">Bill Details
+      <button class="modal-close" onclick="document.getElementById('billDetailModal').classList.remove('open')">×</button>
+    </div>
+    <div id="billDetailContent"></div>
+    <div style="margin-top:16px;">
+      <button class="btn btn-dark" onclick="reprintBill()">🖨 Reprint Bill</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let PRODUCTS = [], CATEGORIES = [];
+let cart = [], billCounter = 1, payMode = 'Cash';
+let currentBillForReprint = null;
+let historyPage = 0, historyPageSize = 15, historyTotal = 0;
+
+// ============================
+// LICENSE SYSTEM
+// ============================
+async function checkAndShowLicense() {
+  const result = await window.db.checkLicense();
+  const screen = document.getElementById('licenseScreen');
+  const content = document.getElementById('licenseContent');
+  if (result.status === 'activated') { screen.style.display = 'none'; initApp(); return; }
+  screen.style.display = 'flex';
+  if (result.status === 'trial') {
+    content.innerHTML = `
+      <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:14px;margin-bottom:20px;">
+        <div style="font-size:15px;font-weight:700;color:#2e7d32;">✅ Free Trial Active</div>
+        <div style="font-size:13px;color:#388e3c;margin-top:4px;">${result.daysLeft} day${result.daysLeft===1?'':'s'} remaining</div>
+      </div>
+      <button onclick="startTrial()" style="width:100%;padding:12px;background:#1a1a2e;color:white;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:16px;">Continue with Trial →</button>
+      <div style="border-top:1px solid #eee;padding-top:16px;">
+        <div style="font-size:14px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">Already purchased the software?</div>
+        <p style="font-size:12px;color:#888;margin-bottom:10px;">You can activate it immediately without waiting for the trial to end.</p>
+        ${activationForm(result.machineId)}
+      </div>`;
+  } else if (result.status === 'expired') {
+    content.innerHTML = `
+      <div style="background:#fde8e8;border:1px solid #f5c6c6;border-radius:8px;padding:14px;margin-bottom:20px;">
+        <div style="font-size:15px;font-weight:700;color:#c0392b;">⏰ Trial Expired</div>
+        <div style="font-size:13px;color:#c0392b;margin-top:4px;">Your 7-day free trial has ended</div>
+      </div>
+      <p style="font-size:13px;color:#555;margin-bottom:16px;">Enter your activation key to continue.</p>
+      ${activationForm(result.machineId)}`;
+  } else if (result.status === 'invalid') {
+    content.innerHTML = `
+      <div style="background:#fde8e8;border:1px solid #f5c6c6;border-radius:8px;padding:14px;margin-bottom:20px;">
+        <div style="font-size:15px;font-weight:700;color:#c0392b;">❌ Invalid License</div>
+        <div style="font-size:13px;color:#c0392b;margin-top:4px;">License not valid for this computer</div>
+      </div>
+      ${activationForm(result.machineId)}`;
+  }
+}
+
+function openLicenseActivation() {
+  window.db.checkLicense().then(result => {
+    if (result.status === 'activated') {
+      alert('✅ This software is already activated on this computer.');
+      return;
+    }
+    const screen = document.getElementById('licenseScreen');
+    const content = document.getElementById('licenseContent');
+    screen.style.display = 'flex';
+    const trialText = result.status === 'trial'
+      ? `<div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:12px;margin-bottom:14px;color:#2e7d32;font-size:13px;">Free trial active — ${result.daysLeft} day${result.daysLeft===1?'':'s'} remaining.</div>`
+      : '';
+    content.innerHTML = `
+      ${trialText}
+      <div style="font-size:16px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">🔑 Activate SS Billings</div>
+      <p style="font-size:12px;color:#888;margin-bottom:14px;">You can activate the software at any time during the trial period.</p>
+      ${activationForm(result.machineId)}
+      <button onclick="closeLicenseActivation()" style="width:100%;padding:10px;background:#eee;color:#333;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;">Back to Software</button>`;
+  });
+}
+
+function closeLicenseActivation() {
+  document.getElementById('licenseScreen').style.display = 'none';
+}
+
+function activationForm(machineId) {
+  return `
+    <div style="background:#f5f5f5;border-radius:8px;padding:12px;margin-bottom:14px;text-align:left;">
+      <div style="font-size:11px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;">Your Machine ID</div>
+      <div style="font-size:15px;font-weight:700;color:#1a1a2e;letter-spacing:0.1em;">${machineId}</div>
+      <div style="font-size:11px;color:#aaa;margin-top:4px;">Share this with your software provider to get a key</div>
+    </div>
+    <input type="text" id="licenseKeyInput" placeholder="Enter license key: XXXX-XXXX-XXXX-XXXX"
+      style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;margin-bottom:10px;text-align:center;letter-spacing:0.05em;" />
+    <button onclick="activateNow()" style="width:100%;padding:11px;background:#27ae60;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Activate License</button>
+    <div id="activateError" style="color:#c0392b;font-size:13px;margin-top:8px;display:none;"></div>`;
+}
+
+function startTrial() { document.getElementById('licenseScreen').style.display = 'none'; initApp(); }
+
+async function activateNow() {
+  const key = document.getElementById('licenseKeyInput').value.trim();
+  if (!key) { showActivateError('Please enter your license key'); return; }
+  const result = await window.db.activateLicense(key);
+  if (result.success) { document.getElementById('licenseScreen').style.display = 'none'; initApp(); }
+  else showActivateError(result.error);
+}
+
+function showActivateError(msg) {
+  const el = document.getElementById('activateError');
+  el.textContent = '❌ ' + msg; el.style.display = 'block';
+}
+
+// ============================
+// APP INIT
+// ============================
+async function initApp() {
+  await loadSettings();
+  await loadCategories();
+  CUSTOMERS = await window.db.getCustomers();
+  await loadProducts();
+  renderBill();
+  updateDate();
+  setInterval(updateDate, 1000);
+}
+
+async function loadCategories() {
+  CATEGORIES = await window.db.getCategories();
+  populateCategoryDropdowns();
+}
+
+async function loadProducts() {
+  PRODUCTS = await window.db.getProducts();
+  renderProducts();
+  if (document.getElementById('page-manage')?.classList.contains('active')) renderManageItems();
+}
+
+function populateCategoryDropdowns() {
+  const opts = CATEGORIES.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  document.getElementById('catFilter').innerHTML = `<option value="">All categories</option>` + opts;
+  document.getElementById('add-cat').innerHTML = opts;
+  document.getElementById('edit-cat').innerHTML = opts;
+  const manageFilter = document.getElementById('manage-cat-filter');
+  if (manageFilter) manageFilter.innerHTML = `<option value="">All categories</option>` + opts;
+  renderCatTags();
+}
+
+function renderCatTags() {
+  const el = document.getElementById('catTagList');
+  if (!el) return;
+  if (!CATEGORIES.length) {
+    el.innerHTML = '<div style="text-align:center;color:#bbb;padding:1rem;">No categories added yet</div>';
+    return;
+  }
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse;">
+    <thead><tr><th style="text-align:left;padding:10px;">Category Name</th><th style="text-align:center;padding:10px;">Products</th><th style="text-align:right;padding:10px;">Actions</th></tr></thead>
+    <tbody>${CATEGORIES.map(c => {
+      const count = PRODUCTS.filter(p => p.cat === c.name).length;
+      return `<tr>
+        <td style="padding:10px;border-top:1px solid #eee;font-weight:600;">🏷️ ${c.name}</td>
+        <td style="padding:10px;border-top:1px solid #eee;text-align:center;color:#777;">${count}</td>
+        <td style="padding:10px;border-top:1px solid #eee;text-align:right;">
+          <button class="edit-btn" onclick="editCategory(${c.id}, ${JSON.stringify(c.name)})">✏️ Edit</button>
+          <button class="del-btn" onclick="deleteCategory(${c.id}, ${JSON.stringify(c.name)})">🗑️ Delete</button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+// ============================
+// SIDEBAR & NAV
+// ============================
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+
+const pageTitles = { home:'Home / Billing', add:'Add Items', manage:'Manage Items', categories:'Categories', history:'Bill History', customers:'Customers', admin:'Admin', dashboard:'Dashboard', settings:'Settings' };
+
+function showPage(page, ev) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  if (ev && ev.currentTarget) ev.currentTarget.classList.add('active');
+  document.getElementById('topbarTitle').textContent = pageTitles[page];
+  if (page === 'manage') renderManageItems();
+  if (page === 'categories') renderCatTags();
+  if (page === 'history') loadHistory();
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'customers') loadCustomersPage();
+  if (page === 'admin') loadAdminPage();
+  if (page === 'settings') showSettingsPage();
+}
+
+function updateDate() {
+  const now = new Date();
+  document.getElementById('topbarDate').textContent =
+    now.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'}) + ' ' +
+    now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ============================
+// CATEGORIES
+// ============================
+async function addCategory() {
+  const name = document.getElementById('new-cat-name').value.trim();
+  if (!name) return;
+  const res = await window.db.addCategory(name);
+  const s = document.getElementById('cat-success'), e = document.getElementById('cat-error');
+  if (res.success) {
+    document.getElementById('new-cat-name').value = '';
+    s.style.display = 'block'; e.style.display = 'none';
+    setTimeout(() => s.style.display = 'none', 2500);
+    await loadCategories();
+  } else { e.textContent = '❌ ' + res.error; e.style.display = 'block'; s.style.display = 'none'; }
+}
+
+async function editCategory(id, oldName) {
+  const newName = prompt(`Edit category name:`, oldName);
+  if (newName === null) return;
+  const clean = newName.trim();
+  if (!clean) { alert('Category name cannot be empty'); return; }
+  if (clean === oldName) return;
+  const res = await window.db.updateCategory(id, clean);
+  if (!res.success) { alert('❌ ' + res.error); return; }
+  await loadCategories();
+  await loadProducts();
+}
+
+async function deleteCategory(id, name) {
+  if (!confirm(`Delete category "${name}"?`)) return;
+  const res = await window.db.deleteCategory(id);
+  if (!res.success) { alert('❌ ' + res.error); return; }
+  await loadCategories();
+  await loadProducts();
+}
+
+// ============================
+// BILLING
+// ============================
+function setPayMode(mode) {
+  payMode = mode;
+  document.querySelectorAll('.pay-btn').forEach(b => b.classList.toggle('active', b.textContent === mode));
+}
+
+function renderProducts() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const cat = document.getElementById('catFilter').value;
+  const grid = document.getElementById('productGrid');
+  const filtered = PRODUCTS.filter(p =>
+    (!q || p.name.toLowerCase().includes(q) || (p.serial_no||'').toLowerCase().includes(q) || (p.barcode||'').includes(q)) &&
+    (!cat || p.cat === cat)
+  );
+  grid.innerHTML = filtered.map(p => {
+    const outOfStock = p.stock <= 0;
+    const lowStock = p.stock > 0 && p.stock <= 10;
+    return `
+      <div class="product-card" onclick="addToCart(${p.id})" style="${outOfStock?'opacity:0.5;cursor:not-allowed;':''}">
+        <div class="name">${p.name}</div>
+        <div class="price">&#8377;${p.price.toFixed(2)}</div>
+        <span class="gst-badge">GST ${p.gst}%</span>
+        ${p.serial_no ? `<span class="serial-badge">📋 ${p.serial_no}</span>` : ''}
+        ${p.barcode ? `<span style="display:block;font-size:9px;color:#bbb;margin-top:1px;">🔲 ${p.barcode}</span>` : ''}
+        ${outOfStock ? '<span style="display:block;margin-top:4px;font-size:10px;color:#c0392b;font-weight:700;">OUT OF STOCK</span>' : ''}
+        ${lowStock ? `<span style="display:block;margin-top:4px;font-size:10px;color:#e67e22;font-weight:700;">LOW: ${p.stock} left</span>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function handleBarcodeScan(e) {
+  if (e.key !== 'Enter') return;
+  const code = document.getElementById('barcodeInput').value.trim();
+  if (!code) return;
+  const product = await window.db.getProductByBarcode(code);
+  if (product) {
+    addToCartById(product.id);
+    document.getElementById('barcodeInput').value = '';
+  } else {
+    alert(`⚠️ No product found for barcode/serial: ${code}`);
+    document.getElementById('barcodeInput').value = '';
+  }
+}
+
+function addToCart(id) { addToCartById(id); }
+
+function addToCartById(id) {
+  const p = PRODUCTS.find(x => x.id === id);
+  if (!p) return;
+  if (p.stock <= 0) { alert(`⚠️ "${p.name}" is out of stock!`); return; }
+  const ex = cart.find(x => x.id === id);
+  const currentQty = ex ? ex.qty : 0;
+  if (currentQty >= p.stock) { alert(`⚠️ Only ${p.stock} units available for "${p.name}"`); return; }
+  if (ex) ex.qty++; else cart.push({...p, qty:1});
+  renderBill();
+}
+
+function changeQty(id, delta) {
+  const item = cart.find(x => x.id === id);
+  if (!item) return;
+  const product = PRODUCTS.find(p => p.id === id);
+  if (delta > 0 && item.qty >= product.stock) { alert(`⚠️ Only ${product.stock} units available`); return; }
+  item.qty += delta;
+  if (item.qty <= 0) cart = cart.filter(x => x.id !== id);
+  renderBill();
+}
+
+function removeItem(id) { cart = cart.filter(x => x.id !== id); renderBill(); }
+
+function calcTotals() {
+  const discPct = parseFloat(document.getElementById('discountPct')?.value || 0);
+  let subtotal = 0, totalGst = {};
+  cart.forEach(item => {
+    const base = item.price / (1 + item.gst / 100);
+    const gstAmt = item.price - base;
+    subtotal += base * item.qty;
+    if (!totalGst[item.gst]) totalGst[item.gst] = 0;
+    totalGst[item.gst] += gstAmt * item.qty;
+  });
+  const totalGstAmt = Object.values(totalGst).reduce((a,b)=>a+b,0);
+  const grossTotal = subtotal + totalGstAmt;
+  const discAmt = grossTotal * discPct / 100;
+  return { subtotal, totalGst, totalGstAmt, grossTotal, discAmt, discPct, grandTotal: grossTotal - discAmt };
+}
+
+function renderBill() {
+  const body = document.getElementById('billBody');
+  document.getElementById('emptyMsg').style.display = cart.length ? 'none' : 'block';
+  body.innerHTML = cart.map(item => `
+    <tr>
+      <td style="font-size:11px;">${item.name}</td>
+      <td class="right">&#8377;${item.price.toFixed(2)}</td>
+      <td>
+        <button class="qty-btn" onclick="changeQty(${item.id},-1)">-</button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn" onclick="changeQty(${item.id},1)">+</button>
+      </td>
+      <td class="right">&#8377;${(item.price*item.qty).toFixed(2)}</td>
+      <td><button class="remove-btn" onclick="removeItem(${item.id})">x</button></td>
+    </tr>`).join('');
+  renderTotals();
+}
+
+function renderTotals() {
+  const { subtotal, totalGst, discAmt, discPct, grandTotal } = calcTotals();
+  const sec = document.getElementById('totalsSection');
+  let gstRows = Object.entries(totalGst).filter(([,v])=>v>0).map(([rate,amt]) =>
+    `<div class="total-row"><span>GST ${rate}% (CGST ${rate/2}% + SGST ${rate/2}%)</span><span>&#8377;${amt.toFixed(2)}</span></div>`).join('');
+  sec.innerHTML = `
+    <div class="total-row"><span>Subtotal (excl. GST)</span><span>&#8377;${subtotal.toFixed(2)}</span></div>
+    ${gstRows}
+    ${discPct>0?`<div class="total-row"><span>Discount (${discPct}%)</span><span>-&#8377;${discAmt.toFixed(2)}</span></div>`:''}
+    <div class="total-row grand"><span>Grand Total</span><span>&#8377;${grandTotal.toFixed(2)}</span></div>
+    <div class="total-row" style="font-size:11px;color:#aaa;"><span>Items: ${cart.reduce((a,i)=>a+i.qty,0)} | ${payMode}</span></div>`;
+}
+
+function generateBillHtml(billId, dateStr, cust, phone, items, subtotal, totalGst, discAmt, discPct, grandTotal, pm, shopName, shopAddress, shopGstin, shopPhone) {
+  let itemRows = items.map(i => `
+    <tr>
+      <td style="padding:4px 6px;border-bottom:1px dashed #ccc;">
+        ${i.name}
+        ${i.serial_no ? '<br><span style="font-size:9px;color:#aaa;">S/N: '+i.serial_no+'</span>' : ''}
+      </td>
+      <td style="padding:4px 6px;text-align:right;border-bottom:1px dashed #ccc;">&#8377;${parseFloat(i.price).toFixed(2)}</td>
+      <td style="padding:4px 6px;text-align:center;border-bottom:1px dashed #ccc;">${i.qty}</td>
+      <td style="padding:4px 6px;text-align:right;border-bottom:1px dashed #ccc;">GST ${i.gst}%</td>
+      <td style="padding:4px 6px;text-align:right;border-bottom:1px dashed #ccc;">&#8377;${(parseFloat(i.price)*i.qty).toFixed(2)}</td>
+    </tr>`).join('');
+  let gstRows = Object.entries(totalGst).filter(([,v])=>v>0).map(([rate,amt]) =>
+    `<tr><td colspan="4" style="padding:2px 6px;color:#555;">GST ${rate}% (CGST ${rate/2}% + SGST ${rate/2}%)</td><td style="text-align:right;padding:2px 6px;">&#8377;${parseFloat(amt).toFixed(2)}</td></tr>`).join('');
+  return `<html><head><title>Bill #${billId}</title>
+    <style>body{font-family:monospace;font-size:13px;padding:16px;max-width:380px;margin:auto;}h2{text-align:center;font-size:15px;}.center{text-align:center;}.divider{border-top:1px dashed #999;margin:8px 0;}table{width:100%;border-collapse:collapse;}.grand{font-weight:bold;font-size:15px;}</style>
+    </head><body>
+    <h2>${shopName}</h2>
+    <div class="center" style="font-size:11px;">${shopAddress}<br>GSTIN: ${shopGstin}${shopPhone ? ` | Ph: ${shopPhone}` : ''}</div>
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;"><span>Bill #${billId}</span><span>${dateStr}</span></div>
+    <div style="font-size:12px;">Customer: ${cust}${phone?' | '+phone:''}</div>
+    <div class="divider"></div>
+    <table><thead><tr style="font-size:11px;"><th style="text-align:left;">Item</th><th style="text-align:right;">Rate</th><th style="text-align:center;">Qty</th><th>GST</th><th style="text-align:right;">Amt</th></tr></thead>
+    <tbody>${itemRows}</tbody></table>
+    <div class="divider"></div>
+    <table>
+      <tr><td colspan="4">Subtotal (excl. GST)</td><td style="text-align:right;">&#8377;${parseFloat(subtotal).toFixed(2)}</td></tr>
+      ${gstRows}
+      ${discPct>0?`<tr><td colspan="4">Discount (${discPct}%)</td><td style="text-align:right;">-&#8377;${parseFloat(discAmt).toFixed(2)}</td></tr>`:''}
+      <tr class="grand"><td colspan="4">Grand Total</td><td style="text-align:right;">&#8377;${parseFloat(grandTotal).toFixed(2)}</td></tr>
+      <tr style="font-size:11px;"><td colspan="5">Payment: ${pm}</td></tr>
+    </table>
+    <div class="divider"></div>
+    <div class="center" style="font-size:11px;">Thank you for shopping with us!</div>
+    <script>window.print();<\/script></body></html>`;
+}
+
+async function printBill() {
+  if (!cart.length) { alert('Add items first!'); return; }
+  const { subtotal, totalGst, totalGstAmt, discAmt, discPct, grandTotal } = calcTotals();
+  const cust = document.getElementById('custName').value || 'Walk-in Customer';
+  const phone = document.getElementById('custPhone').value;
+  const custId = document.getElementById('custId').value
+  await window.db.saveBill({ customerName:cust, customerPhone:phone, customerId: custId ? parseInt(custId) : null, subtotal, gstAmount:totalGstAmt, discount:discAmt, grandTotal, paymentMode:payMode, itemsJson:JSON.stringify(cart) })
+  // If credit payment, add to customer's credit balance
+  if (payMode === 'Credit' && custId) {
+    await window.db.updateCredit(parseInt(custId), grandTotal)
+  };
+  for (const item of cart) {
+    const product = PRODUCTS.find(p => p.id === item.id);
+    if (product) { const ns = Math.max(0, product.stock - item.qty); await window.db.updateStock(item.id, ns); product.stock = ns; }
+  }
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-IN') + ' ' + now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  const win = window.open('','_blank','width=400,height=700');
+  win.document.write(generateBillHtml(String(billCounter).padStart(3,'0'), dateStr, cust, phone, cart, subtotal, totalGst, discAmt, discPct, grandTotal, payMode, SHOP.shopName, SHOP.shopAddress, SHOP.shopGstin, SHOP.shopPhone));
+  win.document.close();
+  billCounter++;
+  document.getElementById('billNo').textContent = 'Bill #' + String(billCounter).padStart(3,'0');
+  renderProducts();
+}
+
+function newBill() {
+  cart = [];
+  document.getElementById('custName').value = '';
+  document.getElementById('custPhone').value = '';
+  document.getElementById('custId').value = '';
+  const info = document.getElementById('custCreditInfo'); if(info) info.style.display='none';
+  document.getElementById('discountPct').value = '0';
+  document.getElementById('barcodeInput').value = '';
+  payMode = 'Cash';
+  document.querySelectorAll('.pay-btn').forEach(b => b.classList.toggle('active', b.textContent==='Cash'));
+  renderBill();
+}
+
+// ============================
+// ADD PRODUCT
+// ============================
+async function addProduct() {
+  const name = document.getElementById('add-name').value.trim();
+  const cat = document.getElementById('add-cat').value;
+  const gst = parseInt(document.getElementById('add-gst').value);
+  const price = parseFloat(document.getElementById('add-price').value);
+  const stock = parseInt(document.getElementById('add-stock').value) || 0;
+  const barcode = document.getElementById('add-barcode').value.trim() || null;
+  if (!name || !price) { alert('Please fill in product name and price.'); return; }
+  const result = await window.db.addProduct({ name, cat, price, gst, stock, barcode });
+  document.getElementById('add-name').value = '';
+  document.getElementById('add-price').value = '';
+  document.getElementById('add-stock').value = '';
+  document.getElementById('add-barcode').value = '';
+  const msg = document.getElementById('add-success');
+  const err = document.getElementById('add-error');
+  if (result.success) {
+    msg.innerHTML = `✅ Product added successfully!<br>
+      <span style="font-size:12px;color:#2e7d32;">
+        📋 Serial: <strong>${result.serialNo}</strong>&nbsp;&nbsp;
+        🔲 Barcode: <strong>${result.barcode}</strong>
+        ${!barcode ? ' <em style="color:#aaa;">(auto-generated)</em>' : ''}
+      </span>`;
+    msg.style.display = 'block'; err.style.display = 'none';
+    setTimeout(() => msg.style.display = 'none', 6000);
+    await loadProducts();
+  } else {
+    err.textContent = '❌ Failed to add product.'; err.style.display = 'block';
+  }
+}
+
+// ============================
+// MANAGE PRODUCTS
+// ============================
+function renderManageItems() {
+  const searchEl = document.getElementById('manage-search');
+  const filterEl = document.getElementById('manage-cat-filter');
+  if (!searchEl || !filterEl) return;
+  const q = searchEl.value.toLowerCase().trim();
+  const cat = filterEl.value;
+  const filtered = PRODUCTS.filter(p =>
+    (!q || p.name.toLowerCase().includes(q) || (p.serial_no||'').toLowerCase().includes(q) || (p.barcode||'').toLowerCase().includes(q)) &&
+    (!cat || p.cat === cat)
+  );
+  const el = document.getElementById('manageList');
+  if (!filtered.length) {
+    el.innerHTML = '<div style="text-align:center;color:#bbb;padding:2rem;">No products found</div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Name</th><th>Category</th><th>Price</th><th>GST</th><th>Stock</th>
+      <th>Serial No.</th><th>Barcode</th><th>Actions</th>
+    </tr></thead>
+    <tbody>${filtered.map(p => `
+      <tr>
+        <td><strong>${p.name}</strong></td>
+        <td>${p.cat}</td>
+        <td>&#8377;${Number(p.price).toFixed(2)}</td>
+        <td>${p.gst}%</td>
+        <td style="color:${p.stock<=0?'#c0392b':p.stock<=10?'#e67e22':'#333'};font-weight:${p.stock<=10?'700':'400'}">${p.stock<=0?'Out of stock':p.stock}</td>
+        <td style="font-size:12px;color:#555;font-weight:600;">${p.serial_no||'—'}</td>
+        <td style="font-size:12px;color:#888;">${p.barcode||'—'}</td>
+        <td style="white-space:nowrap;">
+          <button class="edit-btn" onclick="openEdit(${p.id})">✏️ Edit</button>
+          <button class="barcode-btn" onclick="showBarcode(${p.id})">🔲 Barcode</button>
+          <button class="del-btn" onclick="removeProduct(${p.id})">🗑️ Remove</button>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function openEdit(id) {
+  const p = PRODUCTS.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-name').value = p.name;
+  document.getElementById('edit-cat').value = p.cat;
+  document.getElementById('edit-gst').value = p.gst;
+  document.getElementById('edit-price').value = p.price;
+  document.getElementById('edit-stock').value = p.stock ?? 0;
+  document.getElementById('edit-barcode').value = p.barcode || '';
+  document.getElementById('edit-serial').value = p.serial_no || '';
+  document.getElementById('edit-error').style.display = 'none';
+  document.getElementById('edit-success').style.display = 'none';
+  document.getElementById('editForm').style.display = 'block';
+  document.getElementById('editForm').scrollIntoView({behavior:'smooth'});
+}
+
+function closeEditForm() { document.getElementById('editForm').style.display = 'none'; }
+
+async function saveEdit() {
+  const id = parseInt(document.getElementById('edit-id').value);
+  const p = {
+    id,
+    name: document.getElementById('edit-name').value.trim(),
+    cat: document.getElementById('edit-cat').value,
+    gst: parseInt(document.getElementById('edit-gst').value),
+    price: parseFloat(document.getElementById('edit-price').value),
+    stock: parseInt(document.getElementById('edit-stock').value) || 0,
+    barcode: document.getElementById('edit-barcode').value.trim() || null,
+    serial_no: document.getElementById('edit-serial').value.trim() || null
+  };
+  if (!p.name || !p.price || p.price < 0) { alert('Enter a valid product name and price.'); return; }
+  const res = await window.db.updateProduct(p);
+  const err = document.getElementById('edit-error');
+  if (!res.success) { err.textContent = '❌ ' + (res.error || 'Update failed'); err.style.display = 'block'; return; }
+  document.getElementById('edit-success').style.display = 'block';
+  err.style.display = 'none';
+  await loadProducts();
+  setTimeout(closeEditForm, 1000);
+}
+
+// ============================
+// BARCODE MODAL
+// ============================
+function showBarcode(id) {
+  const p = PRODUCTS.find(x => x.id === id);
+  if (!p) return;
+  const barcodeVal = p.barcode || p.serial_no;
+  if (!barcodeVal) { alert('No barcode or serial number available.'); return; }
+  document.getElementById('modal-product-name').textContent = p.name;
+  document.getElementById('modal-barcode-val').textContent = '🔲 Barcode: ' + (p.barcode || 'N/A');
+  document.getElementById('modal-serial-val').textContent = p.serial_no ? '📋 Serial: ' + p.serial_no : '';
+  try {
+    JsBarcode('#barcodePreview', barcodeVal, {format:'CODE128', width:2, height:80, displayValue:true, fontSize:14, margin:10});
+  } catch(e) { alert('Invalid barcode: ' + e.message); return; }
+  document.getElementById('barcodeModal').classList.add('open');
+}
+
+function closeBarcodeModal() { document.getElementById('barcodeModal').classList.remove('open'); }
+
+function printBarcode() {
+  const name = document.getElementById('modal-product-name').textContent;
+  const barcodeText = document.getElementById('modal-barcode-val').textContent;
+  const serialText = document.getElementById('modal-serial-val').textContent;
+  const svg = document.getElementById('barcodePreview').outerHTML;
+  const win = window.open('','_blank','width=320,height=320');
+  win.document.write(`<html><head><title>Barcode - ${name}</title>
+    <style>body{font-family:Arial;text-align:center;padding:20px;}h3{font-size:13px;margin-bottom:8px;}.sub{font-size:11px;color:#666;margin-top:4px;}</style>
+    </head><body>
+    <h3>${name}</h3>
+    ${svg}
+    <div class="sub">${barcodeText}</div>
+    ${serialText ? `<div class="sub">${serialText}</div>` : ''}
+    <script>window.print();<\/script></body></html>`);
+  win.document.close();
+}
+
+// ============================
+// REMOVE PRODUCT
+// ============================
+async function removeProduct(id) {
+  const p = PRODUCTS.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`Remove "${p.name}" from inventory?`)) return;
+  const res = await window.db.deleteProduct(id);
+  if (!res.success) { alert('❌ ' + (res.error || 'Could not remove product')); return; }
+  cart = cart.filter(x => x.id !== id);
+  await loadProducts();
+  renderManageItems();
+  renderBill();
+}
+
+// ============================
+// BILL HISTORY
+// ============================
+async function loadHistory() {
+  document.getElementById('history-search').value = '';
+  const countRes = await window.db.getBillsCount();
+  historyTotal = countRes.count;
+  historyPage = 0;
+  await renderHistory();
+}
+
+async function renderHistory() {
+  const bills = await window.db.getAllBills(historyPageSize, historyPage * historyPageSize);
+  renderBillList(bills);
+  renderPagination();
+}
+
+async function searchBills() {
+  const q = document.getElementById('history-search').value.trim();
+  if (!q) { loadHistory(); return; }
+  const bills = await window.db.searchBills(q);
+  renderBillList(bills);
+  document.getElementById('pagination').innerHTML = '';
+}
+
+function renderBillList(bills) {
+  if (!bills.length) { document.getElementById('billHistoryList').innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;">No bills found</div>'; return; }
+  document.getElementById('billHistoryList').innerHTML = bills.map(b => `
+    <div class="bill-row" onclick="showBillDetail(${b.id})">
+      <div class="bill-row-left">
+        <div class="bill-id">Bill #${String(b.id).padStart(3,'0')}</div>
+        <div class="bill-meta">${b.customer_name||'Walk-in'} ${b.customer_phone?'· '+b.customer_phone:''} · ${new Date(b.created_at).toLocaleString('en-IN')}</div>
+      </div>
+      <div class="bill-row-right">
+        <div class="bill-amt">₹${parseFloat(b.grand_total).toFixed(2)}</div>
+        <div class="bill-pay">${b.payment_mode}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderPagination() {
+  const totalPages = Math.ceil(historyTotal / historyPageSize);
+  if (totalPages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+  document.getElementById('pagination').innerHTML = `
+    <button onclick="changePage(-1)" ${historyPage===0?'disabled':''}>← Prev</button>
+    <span>Page ${historyPage+1} of ${totalPages} (${historyTotal} bills)</span>
+    <button onclick="changePage(1)" ${historyPage>=totalPages-1?'disabled':''}>Next →</button>`;
+}
+
+async function changePage(dir) { historyPage += dir; await renderHistory(); }
+
+async function showBillDetail(id) {
+  const bills = await window.db.searchBills(String(id));
+  const bill = bills.find(b => b.id === id);
+  if (!bill) return;
+  currentBillForReprint = bill;
+  const items = bill.items_json ? JSON.parse(bill.items_json) : [];
+  const subtotal = parseFloat(bill.subtotal);
+  const gst = parseFloat(bill.gst_amount);
+  const disc = parseFloat(bill.discount);
+  const grand = parseFloat(bill.grand_total);
+  document.getElementById('billDetailContent').innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+      <div><strong>Bill #${String(bill.id).padStart(3,'0')}</strong></div>
+      <div style="font-size:12px;color:#888;">${new Date(bill.created_at).toLocaleString('en-IN')}</div>
+    </div>
+    <div style="font-size:13px;color:#555;margin-bottom:12px;">Customer: ${bill.customer_name||'Walk-in'} ${bill.customer_phone?'· '+bill.customer_phone:''}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;">
+      <thead><tr style="background:#f5f5f5;">
+        <th style="padding:8px;text-align:left;">Item</th>
+        <th style="padding:8px;text-align:left;">Serial</th>
+        <th style="padding:8px;text-align:right;">Rate</th>
+        <th style="padding:8px;text-align:center;">Qty</th>
+        <th style="padding:8px;text-align:right;">Amount</th>
+      </tr></thead>
+      <tbody>${items.map(i=>`
+        <tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;">${i.name}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:11px;color:#888;">${i.serial_no||'—'}</td>
+          <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0;">&#8377;${parseFloat(i.price).toFixed(2)}</td>
+          <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #f0f0f0;">${i.qty}</td>
+          <td style="padding:6px 8px;text-align:right;border-bottom:1px solid #f0f0f0;">&#8377;${(parseFloat(i.price)*i.qty).toFixed(2)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="font-size:13px;">
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:#666;"><span>Subtotal</span><span>&#8377;${subtotal.toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0;color:#666;"><span>GST</span><span>&#8377;${gst.toFixed(2)}</span></div>
+      ${disc>0?`<div style="display:flex;justify-content:space-between;padding:3px 0;color:#666;"><span>Discount</span><span>-&#8377;${disc.toFixed(2)}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:16px;font-weight:700;border-top:1px solid #ddd;margin-top:4px;"><span>Grand Total</span><span>&#8377;${grand.toFixed(2)}</span></div>
+      <div style="font-size:12px;color:#888;">Payment: ${bill.payment_mode}</div>
+    </div>`;
+  document.getElementById('billDetailModal').classList.add('open');
+}
+
+function reprintBill() {
+  if (!currentBillForReprint) return;
+  const b = currentBillForReprint;
+  const items = b.items_json ? JSON.parse(b.items_json) : [];
+  const totalGst = {};
+  items.forEach(i => {
+    if (!totalGst[i.gst]) totalGst[i.gst] = 0;
+    const base = parseFloat(i.price) / (1 + i.gst/100);
+    totalGst[i.gst] += (parseFloat(i.price) - base) * i.qty;
+  });
+  const dateStr = new Date(b.created_at).toLocaleString('en-IN');
+  const win = window.open('','_blank','width=400,height=700');
+  win.document.write(generateBillHtml(
+    String(b.id).padStart(3,'0'), dateStr,
+    b.customer_name||'Walk-in', b.customer_phone||'',
+    items, b.subtotal, totalGst, b.discount,
+    b.discount>0?(b.discount/(parseFloat(b.subtotal)+parseFloat(b.gst_amount))*100).toFixed(1):0,
+    b.grand_total, b.payment_mode, SHOP.shopName, SHOP.shopAddress, SHOP.shopGstin, SHOP.shopPhone
+  ));
+  win.document.close();
+}
+
+// ============================
+// DASHBOARD
+// ============================
+async function renderDashboard() {
+  const revenue = await window.db.getRevenueToday();
+  document.getElementById('d-total-products').textContent = PRODUCTS.length;
+  document.getElementById('d-categories').textContent = CATEGORIES.length;
+  document.getElementById('d-bills').textContent = revenue.count;
+  document.getElementById('d-revenue').textContent = '₹' + parseFloat(revenue.total).toFixed(0);
+  const catCount = {};
+  PRODUCTS.forEach(p => catCount[p.cat] = (catCount[p.cat]||0)+1);
+  const maxCat = Math.max(...Object.values(catCount));
+  document.getElementById('catChart').innerHTML = Object.entries(catCount).sort((a,b)=>b[1]-a[1]).map(([cat,count]) => `
+    <div class="bar-row">
+      <div class="bar-label" title="${cat}">${cat}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(count/maxCat*100).toFixed(0)}%"></div></div>
+      <div class="bar-val">${count} items</div>
+    </div>`).join('');
+  const gstCount = {};
+  PRODUCTS.forEach(p => gstCount[p.gst+'%'] = (gstCount[p.gst+'%']||0)+1);
+  const maxGst = Math.max(...Object.values(gstCount));
+  document.getElementById('gstChart').innerHTML = Object.entries(gstCount).sort((a,b)=>parseInt(a)-parseInt(b)).map(([slab,count]) => `
+    <div class="bar-row">
+      <div class="bar-label">GST ${slab}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(count/maxGst*100).toFixed(0)}%;background:#a78bfa;"></div></div>
+      <div class="bar-val">${count} items</div>
+    </div>`).join('');
+  const lowStockItems = PRODUCTS.filter(p => p.stock <= 10).sort((a,b)=>a.stock-b.stock);
+  const lowStockHtml = lowStockItems.length === 0
+    ? '<div style="color:#27ae60;font-size:13px;">✅ All products are well stocked!</div>'
+    : lowStockItems.map(p => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:6px;margin-bottom:6px;background:${p.stock<=0?'#fde8e8':'#fff8e1'};border:1px solid ${p.stock<=0?'#f5c6c6':'#ffe082'};">
+          <div>
+            <span style="font-size:13px;color:#333;">${p.name}</span>
+            ${p.serial_no?`<span style="font-size:11px;color:#aaa;margin-left:8px;">${p.serial_no}</span>`:''}
+          </div>
+          <span style="font-size:12px;font-weight:700;color:${p.stock<=0?'#c0392b':'#e67e22'};">${p.stock<=0?'❌ Out of stock':'⚠️ Only '+p.stock+' left'}</span>
+        </div>`).join('');
+  document.getElementById('lowStockSection').innerHTML = `
+    <div class="panel-title" style="margin-bottom:12px;">⚠️ Stock alerts (${lowStockItems.length})</div>${lowStockHtml}`;
+}
+
+
+
+// ============================
+// CUSTOMERS
+// ============================
+let CUSTOMERS = []
+let currentCustomerId = null
+
+async function loadCustomersPage() {
+  CUSTOMERS = await window.db.getCustomers()
+  renderCustomersList(CUSTOMERS)
+}
+
+function filterCustomers() {
+  const q = document.getElementById('cust-search').value.toLowerCase()
+  const filtered = CUSTOMERS.filter(c =>
+    c.name.toLowerCase().includes(q) || (c.phone || '').includes(q)
+  )
+  renderCustomersList(filtered)
+}
+
+function renderCustomersList(list) {
+  const el = document.getElementById('customersList')
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;padding:2rem;color:#bbb;">No customers found</div>'
+    return
+  }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>#</th><th>Name</th><th>Phone</th><th>Address</th>
+      <th>Credit Balance</th><th>Actions</th>
+    </tr></thead>
+    <tbody>${list.map(c => `
+      <tr>
+        <td style="color:#888;font-size:12px;">${c.id}</td>
+        <td><strong>${c.name}</strong></td>
+        <td>${c.phone || '—'}</td>
+        <td style="font-size:12px;color:#888;">${c.address || '—'}</td>
+        <td style="font-weight:700;color:${c.credit_balance > 0 ? '#c0392b' : '#27ae60'};">
+          ${c.credit_balance > 0 ? '₹' + parseFloat(c.credit_balance).toFixed(2) + ' owed' : '✅ Clear'}
+        </td>
+        <td>
+          <button class="edit-btn" onclick="openEditCustomer(${c.id})">Edit</button>
+          <button class="barcode-btn" style="background:#e8eaf6;color:#3949ab;" onclick="showCustomerDetail(${c.id})">Bills</button>
+          <button class="del-btn" onclick="deleteCustomer(${c.id})">Remove</button>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`
+}
+
+function openAddCustomer() {
+  document.getElementById('custFormTitle').textContent = '➕ Add Customer'
+  document.getElementById('cust-id').value = ''
+  document.getElementById('cust-name').value = ''
+  document.getElementById('cust-phone').value = ''
+  document.getElementById('cust-address').value = ''
+  document.getElementById('cust-success').style.display = 'none'
+  document.getElementById('cust-error').style.display = 'none'
+  document.getElementById('custForm').style.display = 'block'
+  document.getElementById('custForm').scrollIntoView({ behavior: 'smooth' })
+}
+
+function openEditCustomer(id) {
+  const c = CUSTOMERS.find(x => x.id === id)
+  if (!c) return
+  document.getElementById('custFormTitle').textContent = '✏️ Edit Customer'
+  document.getElementById('cust-id').value = c.id
+  document.getElementById('cust-name').value = c.name
+  document.getElementById('cust-phone').value = c.phone || ''
+  document.getElementById('cust-address').value = c.address || ''
+  document.getElementById('cust-success').style.display = 'none'
+  document.getElementById('cust-error').style.display = 'none'
+  document.getElementById('custForm').style.display = 'block'
+  document.getElementById('custForm').scrollIntoView({ behavior: 'smooth' })
+}
+
+function closeCustForm() {
+  document.getElementById('custForm').style.display = 'none'
+}
+
+async function saveCustomer() {
+  const id = document.getElementById('cust-id').value
+  const c = {
+    name:    document.getElementById('cust-name').value.trim(),
+    phone:   document.getElementById('cust-phone').value.trim() || null,
+    address: document.getElementById('cust-address').value.trim() || null
+  }
+  if (!c.name) { alert('Please enter customer name'); return }
+  let res
+  if (id) { c.id = parseInt(id); res = await window.db.updateCustomer(c) }
+  else res = await window.db.addCustomer(c)
+  const s = document.getElementById('cust-success')
+  const e = document.getElementById('cust-error')
+  if (res.success) {
+    s.style.display = 'block'; e.style.display = 'none'
+    setTimeout(() => { s.style.display = 'none'; closeCustForm() }, 1500)
+    await loadCustomersPage()
+  } else {
+    e.textContent = '❌ ' + res.error; e.style.display = 'block'; s.style.display = 'none'
+  }
+}
+
+async function deleteCustomer(id) {
+  const c = CUSTOMERS.find(x => x.id === id)
+  if (!confirm(`Remove customer "${c.name}"?`)) return
+  await window.db.deleteCustomer(id)
+  await loadCustomersPage()
+}
+
+async function showCustomerDetail(id) {
+  const c = CUSTOMERS.find(x => x.id === id)
+  if (!c) return
+  document.getElementById('custDetailName').textContent = c.name + (c.phone ? ' · ' + c.phone : '')
+  const bills = await window.db.getCustomerBills(id)
+  const totalSpent = bills.reduce((a, b) => a + parseFloat(b.grand_total), 0)
+  document.getElementById('custDetailContent').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div style="background:#f5f5f5;border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">TOTAL BILLS</div>
+        <div style="font-size:20px;font-weight:700;color:#1a1a2e;">${bills.length}</div>
+      </div>
+      <div style="background:#f5f5f5;border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">TOTAL SPENT</div>
+        <div style="font-size:20px;font-weight:700;color:#27ae60;">₹${totalSpent.toFixed(0)}</div>
+      </div>
+      <div style="background:${c.credit_balance > 0 ? '#fde8e8' : '#e8f5e9'};border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:11px;color:#888;margin-bottom:4px;">CREDIT OWED</div>
+        <div style="font-size:20px;font-weight:700;color:${c.credit_balance > 0 ? '#c0392b' : '#27ae60'};">
+          ${c.credit_balance > 0 ? '₹' + parseFloat(c.credit_balance).toFixed(2) : '✅ Clear'}
+        </div>
+      </div>
+    </div>
+    ${c.credit_balance > 0 ? `
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="number" id="payCredit" placeholder="Enter payment amount" min="0" step="0.01"
+          style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;outline:none;" />
+        <button class="btn btn-success" onclick="collectCredit(${c.id}, ${c.credit_balance})">Collect Payment</button>
+      </div>
+    </div>` : ''}
+    ${bills.length === 0
+      ? '<div style="text-align:center;padding:2rem;color:#bbb;">No bills yet</div>'
+      : `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:#f5f5f5;">
+            <th style="padding:8px;text-align:left;">Bill #</th>
+            <th style="padding:8px;text-align:left;">Date</th>
+            <th style="padding:8px;text-align:right;">Amount</th>
+            <th style="padding:8px;">Payment</th>
+          </tr></thead>
+          <tbody>${bills.map(b => `
+            <tr>
+              <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;">#${String(b.id).padStart(3,'0')}</td>
+              <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:12px;color:#888;">${new Date(b.created_at).toLocaleString('en-IN')}</td>
+              <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:600;">₹${parseFloat(b.grand_total).toFixed(2)}</td>
+              <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:center;">
+                <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${b.payment_mode==='Credit'?'#fde8e8':'#e8f5e9'};color:${b.payment_mode==='Credit'?'#c0392b':'#27ae60'};">${b.payment_mode}</span>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`}
+  `
+  document.getElementById('custDetailModal').classList.add('open')
+}
+
+async function collectCredit(customerId, currentBalance) {
+  const amt = parseFloat(document.getElementById('payCredit').value)
+  if (!amt || amt <= 0) { alert('Enter a valid amount'); return }
+  if (amt > currentBalance) { alert('Amount exceeds credit balance of ₹' + currentBalance.toFixed(2)); return }
+  await window.db.updateCredit(customerId, -amt)
+  await loadCustomersPage()
+  showCustomerDetail(customerId)
+}
+
+// ---- BILLING AUTOCOMPLETE ----
+let autocompleteTimeout = null
+
+async function searchCustomerAutocomplete() {
+  clearTimeout(autocompleteTimeout)
+  const q = document.getElementById('custName').value.trim()
+  const box = document.getElementById('custAutocomplete')
+  if (q.length < 1) { box.style.display = 'none'; document.getElementById('custId').value = ''; return }
+  autocompleteTimeout = setTimeout(async () => {
+    const results = await window.db.searchCustomers(q)
+    if (!results.length) { box.style.display = 'none'; return }
+    box.innerHTML = results.map(c => `
+      <div onclick="selectCustomer(${c.id})"
+        style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;"
+        onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='white'">
+        <strong>${c.name}</strong>
+        <span style="color:#888;margin-left:8px;">${c.phone || ''}</span>
+        ${c.credit_balance > 0 ? `<span style="float:right;color:#c0392b;font-size:11px;">owes ₹${parseFloat(c.credit_balance).toFixed(2)}</span>` : ''}
+      </div>`).join('')
+    box.style.display = 'block'
+  }, 200)
+}
+
+function selectCustomer(id) {
+  const c = CUSTOMERS.find(x => x.id === id) || null
+  if (!c) return
+  document.getElementById('custName').value = c.name
+  document.getElementById('custPhone').value = c.phone || ''
+  document.getElementById('custId').value = c.id
+  document.getElementById('custAutocomplete').style.display = 'none'
+  // Show credit info if they owe money
+  const info = document.getElementById('custCreditInfo')
+  if (c.credit_balance > 0) {
+    info.textContent = '⚠️ This customer has an outstanding credit of ₹' + parseFloat(c.credit_balance).toFixed(2)
+    info.style.display = 'block'
+  } else {
+    info.style.display = 'none'
+  }
+}
+
+// Close autocomplete when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#custName') && !e.target.closest('#custAutocomplete')) {
+    const box = document.getElementById('custAutocomplete')
+    if (box) box.style.display = 'none'
+  }
+})
+
+
+// ============================
+// ADMIN MODULE
+// ============================
+let STAFF = []
+let ADMIN_AUTHENTICATED = false
+
+function openAdminLogin() {
+  document.getElementById('adminPassword').value = ''
+  document.getElementById('adminError').style.display = 'none'
+  document.getElementById('adminLoginModal').classList.add('open')
+  document.getElementById('adminPassword').focus()
+}
+
+function closeAdminLogin() {
+  document.getElementById('adminLoginModal').classList.remove('open')
+}
+
+async function verifyAdmin() {
+  const pwd = document.getElementById('adminPassword').value
+  if (!pwd) { alert('Enter password'); return }
+  const result = await window.db.verifyAdminPassword(pwd)
+  if (result) {
+    ADMIN_AUTHENTICATED = true
+    closeAdminLogin()
+    showPage('admin', { currentTarget: { classList: { add: () => {} } } })
+    loadAdminPage()
+  } else {
+    document.getElementById('adminError').textContent = '❌ Incorrect password'
+    document.getElementById('adminError').style.display = 'block'
+    document.getElementById('adminPassword').value = ''
+  }
+}
+
+async function loadAdminPage() {
+  if (!ADMIN_AUTHENTICATED) { openAdminLogin(); return }
+  STAFF = await window.db.getStaff()
+  renderStaffList()
+  renderTodayAttendance()
+  const today = new Date().toISOString().slice(0,10)
+  document.getElementById('salaryMonth').value = new Date().toISOString().slice(0,7)
+}
+
+function renderStaffList() {
+  const el = document.getElementById('staffList')
+  if (!STAFF.length) { el.innerHTML = '<div style="text-align:center;color:#bbb;padding:1rem;">No staff added yet</div>'; return }
+  el.innerHTML = `<table>
+    <thead><tr><th>Name</th><th>Position</th><th>Salary</th><th>Status</th><th></th></tr></thead>
+    <tbody>${STAFF.map(s => `
+      <tr>
+        <td><strong>${s.name}</strong></td>
+        <td style="font-size:12px;color:#888;">${s.position || '—'}</td>
+        <td style="font-weight:600;">₹${Math.round(s.salary)}</td>
+        <td><span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${s.is_active?'#e8f5e9':'#f5f5f5'};color:${s.is_active?'#27ae60':'#888'};">${s.is_active?'Active':'Inactive'}</span></td>
+        <td>
+          <button class="edit-btn" onclick="openEditStaff(${s.id})">Edit</button>
+          <button class="del-btn" onclick="deleteStaff(${s.id})">Remove</button>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`
+}
+
+async function renderTodayAttendance() {
+  const today = new Date().toISOString().slice(0,10)
+  const attendance = await window.db.getAttendance(null, today)
+  const el = document.getElementById('attendanceList')
+  const attendedIds = new Set(attendance.map(a => a.staff_id))
+  
+  const marked = attendance.map(a => `
+    <div style="padding:8px 12px;background:#e8f5e9;border-radius:6px;margin-bottom:6px;font-size:13px;">
+      <strong>${STAFF.find(s=>s.id===a.staff_id)?.name}</strong>: <span style="color:#27ae60;">${a.status}</span>
+    </div>`).join('')
+  
+  const unmarked = STAFF.filter(s => !attendedIds.has(s.id) && s.is_active).map(s => `
+    <div style="padding:8px 12px;display:flex;gap:4px;background:#f5f5f5;border-radius:6px;margin-bottom:6px;">
+      <strong style="flex:1;font-size:13px;">${s.name}</strong>
+      <button onclick="markAttendance(${s.id},'Present')" style="padding:4px 10px;font-size:11px;border:none;border-radius:4px;background:#27ae60;color:white;cursor:pointer;">✓</button>
+      <button onclick="markAttendance(${s.id},'Absent')" style="padding:4px 10px;font-size:11px;border:none;border-radius:4px;background:#c0392b;color:white;cursor:pointer;">✗</button>
+      <button onclick="markAttendance(${s.id},'Leave')" style="padding:4px 10px;font-size:11px;border:none;border-radius:4px;background:#f39c12;color:white;cursor:pointer;">L</button>
+    </div>`).join('')
+  
+  el.innerHTML = (marked || '') + unmarked || '<div style="text-align:center;color:#bbb;padding:1rem;">All marked for today</div>'
+}
+
+async function markAttendance(staffId, status) {
+  const today = new Date().toISOString().slice(0,10)
+  await window.db.markAttendance(staffId, today, status)
+  renderTodayAttendance()
+}
+
+function openAddStaff() {
+  document.getElementById('staffFormTitle').textContent = '➕ Add Staff'
+  document.getElementById('staff-id').value = ''
+  document.getElementById('staff-name').value = ''
+  document.getElementById('staff-pos').value = ''
+  document.getElementById('staff-phone').value = ''
+  document.getElementById('staff-sal').value = ''
+  document.getElementById('staff-success').style.display = 'none'
+  document.getElementById('staffForm').style.display = 'block'
+}
+
+function openEditStaff(id) {
+  const s = STAFF.find(x => x.id === id)
+  if (!s) return
+  document.getElementById('staffFormTitle').textContent = '✏️ Edit Staff'
+  document.getElementById('staff-id').value = s.id
+  document.getElementById('staff-name').value = s.name
+  document.getElementById('staff-pos').value = s.position || ''
+  document.getElementById('staff-phone').value = s.phone || ''
+  document.getElementById('staff-sal').value = s.salary
+  document.getElementById('staff-success').style.display = 'none'
+  document.getElementById('staffForm').style.display = 'block'
+}
+
+function closeStaffForm() {
+  document.getElementById('staffForm').style.display = 'none'
+}
+
+async function saveStaff() {
+  const id = document.getElementById('staff-id').value
+  const s = {
+    name:    document.getElementById('staff-name').value.trim(),
+    position: document.getElementById('staff-pos').value.trim(),
+    phone:   document.getElementById('staff-phone').value.trim() || null,
+    salary:  parseFloat(document.getElementById('staff-sal').value) || 0,
+    is_active: 1
+  }
+  if (!s.name) { alert('Enter staff name'); return }
+  let res
+  if (id) { s.id = parseInt(id); res = await window.db.updateStaff(s) }
+  else res = await window.db.addStaff(s)
+  if (res.success) {
+    document.getElementById('staff-success').style.display = 'block'
+    setTimeout(() => { document.getElementById('staff-success').style.display = 'none'; closeStaffForm() }, 1500)
+    await loadAdminPage()
+  } else alert('❌ ' + res.error)
+}
+
+async function deleteStaff(id) {
+  const s = STAFF.find(x => x.id === id)
+  if (!confirm(`Remove "${s.name}" (will delete all attendance records)?`)) return
+  await window.db.deleteStaff(id)
+  await loadAdminPage()
+}
+
+async function searchDeleteBills() {
+  const q = document.getElementById('delete-bill-search').value.trim()
+  if (!q) return
+  const bills = await window.db.searchBills(q)
+  const el = document.getElementById('deleteBillsList')
+  el.innerHTML = bills.map(b => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#fde8e8;border-radius:6px;margin-bottom:6px;border:1px solid #f5c6c6;">
+      <div>
+        <strong>Bill #${String(b.id).padStart(3,'0')}</strong>
+        <div style="font-size:11px;color:#888;">${b.customer_name} · ₹${parseFloat(b.grand_total).toFixed(2)}</div>
+      </div>
+      <button onclick="confirmDeleteBill(${b.id})" style="padding:6px 12px;background:#c0392b;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Delete</button>
+    </div>`).join('')
+}
+
+async function confirmDeleteBill(billId) {
+  if (!confirm('This will permanently delete this bill. Continue?')) return
+  await window.db.deleteBill(billId)
+  alert('✅ Bill deleted')
+  searchDeleteBills()
+}
+
+async function changeAdminPassword() {
+  const currentPassword = document.getElementById('currentAdminPassword').value;
+  const newPassword = document.getElementById('newAdminPassword').value;
+  const confirmPassword = document.getElementById('confirmAdminPassword').value;
+  const success = document.getElementById('password-success');
+  const error = document.getElementById('password-error');
+  success.style.display = 'none';
+  error.style.display = 'none';
+  if (!currentPassword) { error.textContent='❌ Enter current password'; error.style.display='block'; return; }
+  if (newPassword.length < 4) { error.textContent='❌ New password must contain at least 4 characters'; error.style.display='block'; return; }
+  if (newPassword !== confirmPassword) { error.textContent='❌ New password and confirmation do not match'; error.style.display='block'; return; }
+  if (currentPassword === newPassword) { error.textContent='❌ New password must be different'; error.style.display='block'; return; }
+  try {
+    const res = await window.db.changeAdminPassword(currentPassword, newPassword);
+    if (!res.success) { error.textContent='❌ ' + res.error; error.style.display='block'; return; }
+    success.style.display='block';
+    document.getElementById('currentAdminPassword').value='';
+    document.getElementById('newAdminPassword').value='';
+    document.getElementById('confirmAdminPassword').value='';
+  } catch(e) {
+    error.textContent='❌ ' + e.message; error.style.display='block';
+  }
+}
+
+async function generateSalaryReport() {
+  const month = document.getElementById('salaryMonth').value;
+  const el = document.getElementById('salaryReportContent');
+  if (!month) { alert('Select a month'); return; }
+  el.innerHTML = '<div style="padding:15px;text-align:center;color:#777;">⏳ Generating salary report...</div>';
+  try {
+    const report = await window.db.getSalaryReport(month);
+    if (!Array.isArray(report)) throw new Error('Invalid report data received');
+    if (!report.length) { el.innerHTML='<div style="padding:20px;text-align:center;color:#888;">No active staff members found.</div>'; return; }
+    let totalPayable = 0;
+    let html = `<div style="margin-top:12px;"><strong>Month: ${month}</strong></div><table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;"><thead><tr style="background:#f5f5f5;"><th style="padding:8px;text-align:left;">Staff Name</th><th style="padding:8px;text-align:right;">Days Present</th><th style="padding:8px;text-align:right;">Daily Rate</th><th style="padding:8px;text-align:right;">Total Salary</th></tr></thead><tbody>`;
+    report.forEach(r => {
+      const salary = Number(r.salary) || 0;
+      const days = Number(r.attendanceDays) || 0;
+      const dailyRate = salary / 30;
+      const totalSalary = Number(r.totalSalary) || 0;
+      totalPayable += totalSalary;
+      html += `<tr><td style="padding:8px;border-bottom:1px solid #f0f0f0;">${r.name}</td><td style="padding:8px;text-align:right;border-bottom:1px solid #f0f0f0;">${days}/30</td><td style="padding:8px;text-align:right;border-bottom:1px solid #f0f0f0;">₹${dailyRate.toFixed(2)}</td><td style="padding:8px;text-align:right;border-bottom:1px solid #f0f0f0;font-weight:700;">₹${totalSalary.toFixed(2)}</td></tr>`;
+    });
+    html += `</tbody></table><div style="margin-top:12px;padding:12px;background:#f5f5f5;border-radius:6px;font-size:14px;font-weight:700;text-align:right;">Total Payable: ₹${totalPayable.toFixed(2)}</div>`;
+    el.innerHTML = html;
+  } catch (e) {
+    console.error('Salary report error:', e);
+    el.innerHTML = `<div style="margin-top:12px;padding:12px;background:#fde8e8;color:#c0392b;border:1px solid #f5c6c6;border-radius:6px;">❌ Could not generate salary report.<div style="margin-top:6px;font-size:12px;">${e.message || e}</div></div>`;
+  }
+}
+
+// ============================
+// SETTINGS
+// ============================
+let SHOP = {
+  shopName:    'PM Supermarket',
+  shopAddress: 'Paarai palli busstand opposite, Madhavalayam, 629302',
+  shopGstin:   'XXXXXXXXXXXXXXX',
+  shopPhone:   ''
+}
+
+async function loadSettings() {
+  try {
+    const data = await window.db.getSettings()
+    if (data && Object.keys(data).length > 0) SHOP = data
+  } catch(e) { console.log('Settings load error:', e) }
+  applySettings()
+}
+
+function applySettings() {
+  document.getElementById('topbarSub').textContent =
+    SHOP.shopName + ' | GSTIN: ' + SHOP.shopGstin + (SHOP.shopPhone ? ' | Ph: ' + SHOP.shopPhone : '')
+  document.getElementById('billShopName').textContent    = SHOP.shopName
+  document.getElementById('billShopAddress').textContent = SHOP.shopAddress
+  document.querySelector('.sidebar-title').textContent   = SHOP.shopName
+}
+
+function showSettingsPage() {
+  document.getElementById('set-shopName').value    = SHOP.shopName    || ''
+  document.getElementById('set-shopAddress').value = SHOP.shopAddress || ''
+  document.getElementById('set-shopGstin').value   = SHOP.shopGstin   || ''
+  document.getElementById('set-shopPhone').value   = SHOP.shopPhone   || ''
+}
+
+async function saveSettings() {
+  const newShop = {
+    shopName:    document.getElementById('set-shopName').value.trim()    || SHOP.shopName,
+    shopAddress: document.getElementById('set-shopAddress').value.trim() || SHOP.shopAddress,
+    shopGstin:   document.getElementById('set-shopGstin').value.trim()   || SHOP.shopGstin,
+    shopPhone:   document.getElementById('set-shopPhone').value.trim()
+  }
+  await window.db.saveSettings(newShop)
+  SHOP = newShop
+  applySettings()
+  const msg = document.getElementById('settings-success')
+  msg.style.display = 'block'
+  setTimeout(() => msg.style.display = 'none', 3000)
+}
+
+// ============================
+// START
+// ============================
+checkAndShowLicense();
+</script>
+</body>
+</html>

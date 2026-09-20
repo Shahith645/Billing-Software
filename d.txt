@@ -1,0 +1,5 @@
+mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+  -Dsonar.projectKey=ExpenseTracker \
+  -Dsonar.projectName='ExpenseTracker' \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.token=sqp_f5b26028a978062cf0965f0df33c6f991cf1761e
